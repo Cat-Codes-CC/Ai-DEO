@@ -1,0 +1,309 @@
+```py
+import csv
+import os
+import json
+import tkinter as tk
+import webbrowser
+from tkinter import messagebox, ttk, filedialog, simpledialog
+
+class DataInExcelStudio:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Data In Excel")
+        self.root.geometry("1100x750")
+        self.root.configure(bg="#f1f5f9")
+        
+        # State
+        self.current_file = None
+        self.headers = []
+        self.config_file = "config.json"
+        
+        self.colors = {
+            "primary": "#3b82f6",
+            "primary_hover": "#2563eb",
+            "sidebar": "#0f172a",
+            "bg": "#f8fafc",
+            "card": "#ffffff",
+            "text_main": "#1e293b",
+            "text_muted": "#64748b",
+            "accent": "#10b981",
+            "danger": "#ef4444",
+            "link": "#60a5fa"
+        }
+        
+        self.setup_styles()
+        self.create_layout()
+        self.load_last_file()
+
+    def setup_styles(self):
+        style = ttk.Style()
+        style.theme_use('clam')
+        style.configure("Treeview", background="white", foreground=self.colors["text_main"], 
+                        rowheight=35, fieldbackground="white", font=("Segoe UI", 10))
+        style.map("Treeview", background=[('selected', self.colors["primary"])])
+        style.configure("Treeview.Heading", font=("Segoe UI", 10, "bold"), background="#f1f5f9", 
+                        foreground=self.colors["text_muted"], borderwidth=0)
+
+    def create_layout(self):
+        # --- SIDEBAR ---
+        self.sidebar = tk.Frame(self.root, bg=self.colors["sidebar"], width=260)
+        self.sidebar.pack(side="left", fill="y")
+        self.sidebar.pack_propagate(False)
+
+        tk.Label(self.sidebar, text="Data In Excel", bg=self.colors["sidebar"], fg="white", 
+                 font=("Segoe UI", 22, "bold")).pack(pady=(40, 5))
+        tk.Label(self.sidebar, text="By Anant Prakash", bg=self.colors["sidebar"], fg=self.colors["primary"], 
+                 font=("Segoe UI", 10, "bold")).pack(pady=(0, 40))
+
+        # Shared Space for Create/Load
+        action_frame = tk.Frame(self.sidebar, bg=self.colors["sidebar"])
+        action_frame.pack(fill="x", padx=15, pady=10)
+        
+        self.create_side_btn(action_frame, "New File", self.create_file).pack(side="left", fill="x", expand=True, padx=2)
+        self.create_side_btn(action_frame, "Open File", self.load_file).pack(side="right", fill="x", expand=True, padx=2)
+
+        # Menu Items
+        menu_items = [
+            ("Add New / Update", self.focus_entry),
+            ("Insert at Position", self.insert_at_pos),
+            ("Delete Selection", self.delete_data),
+            ("Search / Filter", self.search_data),
+            ("Open in Excel", self.open_excel),
+            ("Refresh Table", self.refresh_table),
+            ("Exit Studio", self.root.quit)
+        ]
+
+        for text, func in menu_items:
+            btn = self.create_nav_btn(self.sidebar, text, func)
+            btn.pack(fill="x", padx=15, pady=4)
+
+        # Branding / Clickable GitHub Link
+        footer = tk.Frame(self.sidebar, bg=self.colors["sidebar"])
+        footer.pack(side="bottom", fill="x", pady=20)
+        
+        github_url = "https://github.com/yesap4"
+        link_label = tk.Label(footer, text=github_url, bg=self.colors["sidebar"], 
+                             fg=self.colors["text_muted"], font=("Segoe UI", 8, "italic", "underline"),
+                             cursor="hand2")
+        link_label.pack()
+        
+        # Hyperlink bindings
+        link_label.bind("<Button-1>", lambda e: webbrowser.open(github_url))
+        link_label.bind("<Enter>", lambda e: link_label.config(fg=self.colors["link"]))
+        link_label.bind("<Leave>", lambda e: link_label.config(fg=self.colors["text_muted"]))
+
+        # --- MAIN VIEW ---
+        self.main_container = tk.Frame(self.root, bg=self.colors["bg"])
+        self.main_container.pack(side="right", fill="both", expand=True)
+
+        self.header = tk.Frame(self.main_container, bg="white", height=70)
+        self.header.pack(side="top", fill="x")
+        self.header.pack_propagate(False)
+        
+        self.file_info = tk.Label(self.header, text="No database loaded", bg="white", 
+                                  fg=self.colors["text_muted"], font=("Segoe UI", 12))
+        self.file_info.pack(side="left", padx=25)
+
+        self.content_body = tk.Frame(self.main_container, bg=self.colors["bg"], padx=25, pady=20)
+        self.content_body.pack(fill="both", expand=True)
+
+        self.table_frame = tk.Frame(self.content_body, bg="white")
+        self.table_frame.pack(fill="both", expand=True)
+
+        self.table = ttk.Treeview(self.table_frame, show="headings")
+        self.table.bind("<<TreeviewSelect>>", self.on_row_select)
+        
+        scroll = ttk.Scrollbar(self.table_frame, orient="vertical", command=self.table.yview)
+        self.table.configure(yscrollcommand=scroll.set)
+        self.table.pack(side="left", fill="both", expand=True)
+        scroll.pack(side="right", fill="y")
+
+        # Form Panel
+        self.form_panel = tk.LabelFrame(self.content_body, text=" Record Management ", bg="white", 
+                                        fg=self.colors["text_muted"], font=("Segoe UI", 9, "bold"), pady=15, padx=15)
+        self.form_panel.pack(fill="x", pady=(20, 0))
+        self.form_container = tk.Frame(self.form_panel, bg="white")
+        self.form_container.pack(fill="x")
+        self.entry_widgets = {}
+
+    def create_side_btn(self, parent, text, func):
+        btn = tk.Button(parent, text=text, command=func, bg=self.colors["primary"], fg="white",
+                        font=("Segoe UI", 8, "bold"), relief="flat", pady=8, cursor="hand2")
+        btn.bind("<Enter>", lambda e: btn.config(bg=self.colors["primary_hover"]))
+        btn.bind("<Leave>", lambda e: btn.config(bg=self.colors["primary"]))
+        return btn
+
+    def create_nav_btn(self, parent, text, func):
+        btn = tk.Button(parent, text=text, command=func, bg="#1e293b", fg="#cbd5e1",
+                        font=("Segoe UI", 10), relief="flat", pady=10, anchor="w", padx=20, cursor="hand2")
+        btn.bind("<Enter>", lambda e: btn.config(bg="#334155", fg="white"))
+        btn.bind("<Leave>", lambda e: btn.config(bg="#1e293b", fg="#cbd5e1"))
+        return btn
+
+    def validate_inputs(self, row_data):
+        if not any(str(field).strip() for field in row_data):
+            messagebox.showwarning("Validation Error", "All fields are empty. Please enter data.")
+            return False
+            
+        for i, header in enumerate(self.headers):
+            val = str(row_data[i]).strip()
+            h_lower = header.lower()
+
+            if any(key in h_lower for key in ["name", "student", "id", "roll"]):
+                if not val:
+                    messagebox.showwarning("Validation Error", f"The field '{header}' is required.")
+                    return False
+
+            if any(key in h_lower for key in ["age", "number", "no", "phone", "salary"]):
+                if val:
+                    clean_val = val.replace('.', '', 1)
+                    if not clean_val.isdigit():
+                        messagebox.showwarning("Validation Error", f"Field '{header}' must contain only numbers.")
+                        return False
+        return True
+
+    def load_last_file(self):
+        if os.path.exists(self.config_file):
+            try:
+                with open(self.config_file, 'r') as f:
+                    path = json.load(f).get("last_file")
+                    if path and os.path.exists(path):
+                        self.current_file = path
+                        self.refresh_table()
+            except: pass
+
+    def refresh_table(self):
+        if not self.current_file: return
+        for i in self.table.get_children(): self.table.delete(i)
+        try:
+            with open(self.current_file, 'r', newline='') as f:
+                reader = csv.reader(f)
+                self.headers = next(reader)
+                self.table["columns"] = self.headers
+                for h in self.headers:
+                    self.table.heading(h, text=h.upper())
+                    self.table.column(h, anchor="w", width=120)
+                for row in reader: self.table.insert("", "end", values=row)
+            self.file_info.config(text=f"Active: {os.path.basename(self.current_file)}")
+            self.rebuild_form()
+            with open(self.config_file, 'w') as f: json.dump({"last_file": self.current_file}, f)
+        except Exception as e: messagebox.showerror("Error", str(e))
+
+    def rebuild_form(self):
+        for widget in self.form_container.winfo_children(): widget.destroy()
+        self.entry_widgets = {}
+        for i, h in enumerate(self.headers):
+            frame = tk.Frame(self.form_container, bg="white")
+            frame.grid(row=0, column=i, padx=5, sticky="ew")
+            tk.Label(frame, text=h, bg="white", font=("Segoe UI", 8)).pack(anchor="w")
+            ent = tk.Entry(frame, relief="solid", borderwidth=1)
+            ent.pack(fill="x")
+            self.entry_widgets[h] = ent
+        tk.Button(self.form_container, text="Save / Add Last", command=self.save_record, 
+                  bg=self.colors["accent"], fg="white", relief="flat", padx=10).grid(row=0, column=len(self.headers), padx=10)
+
+    def save_record(self):
+        if not self.current_file: return
+        new_row = [self.entry_widgets[h].get().strip() for h in self.headers]
+        
+        if not self.validate_inputs(new_row): return
+        
+        selected = self.table.selection()
+        all_rows = []
+        with open(self.current_file, 'r') as f:
+            reader = list(csv.reader(f))
+            all_rows.append(reader[0])
+            data = reader[1:]
+            
+        if selected: # Update existing
+            target = [str(x) for x in self.table.item(selected[0])['values']]
+            for r in data: all_rows.append(new_row if [str(x) for x in r] == target else r)
+        else: # Add to last
+            all_rows.extend(data)
+            all_rows.append(new_row)
+            
+        with open(self.current_file, 'w', newline='') as f: csv.writer(f).writerows(all_rows)
+        self.refresh_table()
+        self.clear_entries()
+
+    def clear_entries(self):
+        for ent in self.entry_widgets.values():
+            ent.delete(0, tk.END)
+        self.table.selection_remove(self.table.selection())
+
+    def insert_at_pos(self):
+        if not self.current_file: return
+        new_row = [self.entry_widgets[h].get().strip() for h in self.headers]
+        
+        if not self.validate_inputs(new_row): return
+        
+        pos = simpledialog.askinteger("Insert", "Enter row number (1 is after header):")
+        if pos is None: return
+        
+        all_rows = []
+        with open(self.current_file, 'r') as f:
+            reader = list(csv.reader(f))
+            header = reader[0]
+            data = reader[1:]
+        
+        data.insert(max(0, pos-1), new_row)
+        with open(self.current_file, 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(header)
+            writer.writerows(data)
+        self.refresh_table()
+        self.clear_entries()
+
+    def on_row_select(self, e):
+        sel = self.table.selection()
+        if not sel: return
+        vals = self.table.item(sel[0])['values']
+        for i, h in enumerate(self.headers):
+            self.entry_widgets[h].delete(0, tk.END)
+            self.entry_widgets[h].insert(0, vals[i])
+
+    def create_file(self):
+        p = filedialog.asksaveasfilename(defaultextension=".csv")
+        if not p: return
+        h = simpledialog.askstring("Headers", "Comma separated columns:")
+        if h:
+            with open(p, 'w', newline='') as f: csv.writer(f).writerow([x.strip() for x in h.split(",")])
+            self.current_file = p
+            self.refresh_table()
+
+    def load_file(self):
+        p = filedialog.askopenfilename()
+        if p: self.current_file = p; self.refresh_table()
+
+    def delete_data(self):
+        sel = self.table.selection()
+        if not sel or not messagebox.askyesno("Confirm", "Delete?"): return
+        target = [str(x) for x in self.table.item(sel[0])['values']]
+        rows = []
+        with open(self.current_file, 'r') as f:
+            r = list(csv.reader(f))
+            rows.append(r[0])
+            for row in r[1:]:
+                if [str(x) for x in row] != target: rows.append(row)
+        with open(self.current_file, 'w', newline='') as f: csv.writer(f).writerows(rows)
+        self.refresh_table()
+
+    def search_data(self):
+        q = simpledialog.askstring("Filter", "Search text:")
+        self.refresh_table()
+        if not q: return
+        for i in self.table.get_children():
+            if not any(q.lower() in str(v).lower() for v in self.table.item(i)['values']):
+                self.table.delete(i)
+
+    def open_excel(self):
+        if self.current_file: os.startfile(self.current_file)
+
+    def focus_entry(self):
+        if self.entry_widgets: list(self.entry_widgets.values())[0].focus_set()
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = DataInExcelStudio(root)
+    root.mainloop()
+```
