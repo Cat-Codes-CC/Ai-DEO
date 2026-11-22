@@ -1,5 +1,7 @@
 import csv
 import os
+
+
 def clm():
     global column
     column = []
@@ -7,14 +9,16 @@ def clm():
         col = input('Enter Column Name: ')
         column.append(col)
         choice = int(input('Enter 0 To End The Column Creation \nEnter 1 To Continue Column Creation: '))
-        if choice == 0 or choice != 1 or 0:
+        if choice == 0:
             break
-        global col_count
-        col_count += 1
+        if choice != 1:
+            print('Invalid Choice. Please Enter 0 Or 1.')
     print('File Created Successfully...')
-    with open(filename, 'w' , newline='')as f:
+    with open(filename, 'w', newline='') as f:
         fobj = csv.writer(f)
         fobj.writerow(column)
+
+
 def data():
     global data_column
     data_column = []
@@ -27,31 +31,41 @@ def data():
                 val = input(f'Enter {col_name}: ')
                 row_data.append(val)
             fobj.writerow(row_data)
+
+
 def search():
-    with open(filename, 'r', newline='') as f:
+    if not os.path.exists(filename):
+        print(f'\nFile Not Found... Please Create A File With This Name {filename} ')
+        return
+    with open(filename, 'r', newline='', encoding='utf-8') as f:
         col_no = int(input('Enter Column Number In Which You Want To Search For The Value: '))
         key = input('Enter Value You Want To Search For: ')
-        found = 0 
+        found = 0
         reader = csv.reader(f)
         for ele in reader:
-            if ele[col_no-1] == key:
+            if 1 <= col_no <= len(ele) and ele[col_no - 1] == key:
                 found = 1
-                print('\n',ele,'\n')
+                print('\n', ele, '\n')
                 break
         if found == 0:
             print('\nValue Not Found.\n')
+
+
 def updater():
-    with open(filename, 'r', newline='') as f:
+    if not os.path.exists(filename):
+        print(f'\nFile Not Found... Please Create A File With This Name {filename} ')
+        return
+    with open(filename, 'r', newline='', encoding='utf-8') as f:
         col_no = int(input('Enter Column Number In Which You Want To Update The Value: '))
         key = input('Enter Value You Want To Update: ')
         found = 0
         nrec = []
         reader = csv.reader(f)
         for rec in reader:
-            if rec[col_no-1]==key:
-                print('Current Value: ',rec)
-                rec[col_no-1] = input('Enter The New Value: ')
-                print('Updated Value: ',rec)
+            if 1 <= col_no <= len(rec) and rec[col_no - 1] == key:
+                print('Current Value: ', rec)
+                rec[col_no - 1] = input('Enter The New Value: ')
+                print('Updated Value: ', rec)
                 found = 1
             nrec.append(rec)
     if found == 0:
@@ -61,12 +75,15 @@ def updater():
             w = csv.writer(f)
             w.writerows(nrec)
             print('\nValue Updated Successfully...\n')
+
+
 def ins_last_row():
-    global data_column
-    data_column = []
-    with open(filename,'r')as f:
+    if not os.path.exists(filename):
+        print(f'\nFile Not Found... Please Create A File With This Name {filename} ')
+        return
+    with open(filename, 'r', newline='', encoding='utf-8') as f:
         reader = csv.reader(f)
-        header = next(reader)
+        header = next(reader, None)
     if not header:
         print('File Empty. Create A File First...')
         return
@@ -78,11 +95,19 @@ def ins_last_row():
             row_data.append(val)
         fobj.writerow(row_data)
         print('\nRow Inserted Successfully...\n')
+
+
 def ins_pos_row():
+    if not os.path.exists(filename):
+        print(f'\nFile Not Found... Please Create A File With This Name {filename} ')
+        return
     row_no = int(input('Enter Row Number At Which You Want to Enter Values: '))
-    with open(filename,'r')as f:
+    with open(filename, 'r', newline='', encoding='utf-8') as f:
         reader = csv.reader(f)
         rows = list(reader)
+    if not rows:
+        print('File Empty. Create A File First...')
+        return
     header = rows[0]
     data_row = rows[1:]
 
@@ -94,17 +119,25 @@ def ins_pos_row():
     for col_name in header:
         value = input(f'Enter {col_name}: ')
         new_row.append(value)
-    data_row.insert(row_no-1,new_row)
-    with open(filename,'w',newline='')as f:
+    data_row.insert(row_no - 1, new_row)
+    with open(filename, 'w', newline='') as f:
         writer = csv.writer(f)
         writer.writerow(header)
-        writer.writerow(data_row)
+        writer.writerows(data_row)
     print('\nRow Added Successfully...\n')
+
+
 def delete():
+    if not os.path.exists(filename):
+        print(f'\nFile Not Found... Please Create A File With This Name {filename} ')
+        return
     key = input('Enter Value You Want To Delete.')
-    with open(filename, 'r', newline='') as f:
+    with open(filename, 'r', newline='', encoding='utf-8') as f:
         rows = list(csv.reader(f))
 
+    if not rows:
+        print('File Empty. Create A File First...')
+        return
     header = rows[0]
     data_rows = rows[1:]
     new_data = []
@@ -112,48 +145,70 @@ def delete():
     for row in data_rows:
         if key in row:
             found = 1
-            
         else:
             new_data.append(row)
     if found == 0:
         print('Value Not Found.')
         return
-    with open(filename,'w',newline='')as f:
+    with open(filename, 'w', newline='') as f:
         writer = csv.writer(f)
         writer.writerow(header)
-        writer.writerow(new_data)
+        writer.writerows(new_data)
     print('\nValue Deleted Successfully...\n')
+
+
 def open_file():
     if os.path.exists(filename):
         os.startfile(filename)
-    
-    elif(filename=='.csv'):
-        print('Please, enter a file name!')
     else:
         print(f'\nFile Not Found... Please Create A File With This Name {filename} ')
+
+
+filename = None
+
 while True:
-    task = int(input(
-        'Enter 1 To Create A New File.'
-        '\nEnter 2 To Open The File.'
-        '\nEnter 3 To Search A Value.'
-        '\nEnter 4 To Update A Value.'
-        '\nEnter 5 To Insert A New Row At a Specific Row Number.'
-        '\nEnter 6 To Insert New Row At The Last.'
-        '\nEnter 7 To Delete A Value.'
-        '\nEnter 8 To Exit. '
-        '\nEnter Your Choice: '
-    ))
+    try:
+        task = int(input(
+            'Enter 1 To Create A New File.'
+            '\nEnter 2 To Open The File.'
+            '\nEnter 3 To Search A Value.'
+            '\nEnter 4 To Update A Value.'
+            '\nEnter 5 To Insert A New Row At a Specific Row Number.'
+            '\nEnter 6 To Insert New Row At The Last.'
+            '\nEnter 7 To Delete A Value.'
+            '\nEnter 8 To Exit. '
+            '\nEnter Your Choice: '
+        ))
+    except ValueError:
+        print('Invalid Choice. Please Enter A Number From 1 To 8.')
+        continue
 
     if task == 8:
-        print('\n Thank You! ☻ \n')
+        print('\n Thank You! \n')
         break
+    if task not in range(1, 8):
+        print('Invalid Choice. Please Enter A Number From 1 To 8.')
+        continue
 
-    filename = input('Enter Your Desired Excel File Name: ')
-    if not filename.endswith('.csv'):
-        filename += '.csv'
+    if filename is None or task == 1:
+        name = input('Enter Your Desired Excel File Name: ').strip()
+        if not name:
+            print('Please, enter a file name!')
+            continue
+        if not name.endswith('.csv'):
+            name += '.csv'
+
+        if task == 1 and os.path.exists(name):
+            confirm = input(f'\n{name} Already Exists. Overwrite? (y/n): ').strip().lower()
+            if confirm != 'y':
+                print('File Creation Cancelled.\n')
+                continue
+
+        filename = name
+    else:
+        print(f'\nWorking on file: {filename}')
 
     if task == 1:
-        col_count = 1
         clm()
         data()
     elif task == 2:
@@ -168,4 +223,3 @@ while True:
         ins_last_row()
     elif task == 7:
         delete()
-    
